@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.3%2B-blue.svg)](https://www.home-assistant.io/)
-[![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Gold-gold.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+[![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Platinum-silver.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Macht die **Fränkische Rohrwerke KWL** (Profi-Air) smart — ohne Cloud, ohne externen Dienst, ausschließlich über das lokale Netzwerk.
@@ -16,13 +16,15 @@ Macht die **Fränkische Rohrwerke KWL** (Profi-Air) smart — ohne Cloud, ohne e
 - **Lüftungsstufen 1–4** steuerbar als Fan-Entity mit Prozent-Schieberegler und Preset-Modi
 - **Automatische Zeitsynchronisation** — beim Start und alle 24 Stunden, inkl. Sommer-/Winterzeit
 - **Energie-Dashboard** — kumulativer kWh-Verbrauch pro Stufe basierend auf Betriebsstunden
-- **Vollständiges Sensor-Mapping** — Temperaturen, Motor-RPM, Motorspannung, Wärmerückgewinnung
+- **Vollständiges Sensor-Mapping** — Temperaturen, Motor-RPM, Motorspannung
 - **Bypass-Steuerung** — Manuell offen / Manuell zu / Automatisch
 - **Temperaturkorrekturen** für alle vier Messfühler
 - **HTTP Basic Auth** für den geschützten Installateur-Bereich
 - **Optimistic Updates** — UI reagiert sofort ohne auf den nächsten Poll zu warten
 - **Re-Auth Flow** — automatische Aufforderung bei abgelaufenen Zugangsdaten
 - **Rekonfigurierung** — IP-Adresse und Zugangsdaten ohne Neueinrichtung änderbar
+- **Repair Issue** — Filterwechsel-Alarm mit automatischer Quittierung am Gerät
+- **Konfigurierbare Nennleistung** — Watt-Werte pro Stufe im Setup-Wizard einstellbar
 
 ---
 
@@ -59,6 +61,9 @@ Das Gerät muss über HTTP erreichbar sein (Standard: `http://10.10.4.1`). Eine 
 4. **Schritt 2:** Installateur-Zugangsdaten eingeben
    - Benutzer: `install`
    - Passwort: `konfig12` *(Werkseinstellung — bitte ändern!)*
+5. **Schritt 3:** Nennleistung pro Stufe bestätigen oder anpassen
+   - Standardwerte gelten für die Profi-Air 400: 11 / 17.5 / 43.5 / 80 W
+   - Eigene Werte können mit einer Strommesszange gemessen werden
 
 > ⚠️ **Sicherheitshinweis:** Die Werkseinstellungen (`install` / `konfig12`) sind öffentlich bekannt. Bitte das Passwort direkt am Gerät unter `http://10.10.4.1/setup.htm` ändern.
 
@@ -71,104 +76,95 @@ IP-Adresse oder Zugangsdaten können ohne Neueinrichtung geändert werden:
 
 ## Entities
 
+Alle Entities gehören zu einem einzigen Gerät **KWL** (identifiziert über die MAC-Adresse). Die Entity-IDs werden von HA aus dem Gerätenamen und dem Entitätsnamen generiert — typisch: `sensor.kwl_fraenkische_rohrwerke_abluft_temperatur`.
+
 ### Fan
 | Entity | Beschreibung |
 |--------|-------------|
-| `fan.kwl_lueftung` | Lüftungssteuerung mit Stufe 1–4, Prozent und Preset-Modus |
+| `fan.kwl_fraenkische_rohrwerke` | Lüftungssteuerung mit Stufe 1–4, Prozent und Preset-Modus |
 
-**Preset-Modi:**
-| Preset | Stufe | Prozent | Leistung (gemessen) |
-|--------|-------|---------|---------------------|
-| Stufe 1 – Feuchteschutz | 1 | 25% | 11 W |
-| Stufe 2 – Reduziert | 2 | 50% | 17.5 W |
-| Stufe 3 – Nennlüftung | 3 | 75% | 43.5 W |
-| Stufe 4 – Intensivlüftung | 4 | 100% | 80 W |
+**Preset-Modi** — exakte Namen für Automationen:
+| Preset | Stufe | Prozent | Leistung (konfigurierbar) |
+|--------|-------|---------|--------------------------|
+| `Stufe 1 - Feuchteschutz` | 1 | 25% | Standard: 11 W |
+| `Stufe 2 - Reduziert` | 2 | 50% | Standard: 17.5 W |
+| `Stufe 3 - Nennlueeftung` | 3 | 75% | Standard: 43.5 W |
+| `Stufe 4 - Intensivlueeftung` | 4 | 100% | Standard: 80 W |
+
+> ⚠️ Die Preset-Namen enthalten keine Umlaute (`Nennlueeftung`, `Intensivlueeftung`). Automationen müssen exakt diese Schreibweise verwenden.
 
 ### Sensoren
-| Entity | Beschreibung | Einheit |
+| Entity (Suffix) | Beschreibung | Einheit |
 |--------|-------------|---------|
-| `sensor.kwl_abluft_temperatur` | Ablufttemperatur (Innenluft) | °C |
-| `sensor.kwl_zuluft_temperatur` | Zulufttemperatur (nach Wärmetauscher) | °C |
-| `sensor.kwl_aussenluft_temperatur` | Außenlufttemperatur | °C |
-| `sensor.kwl_fortluft_temperatur` | Fortlufttemperatur (raus) | °C |
-| `sensor.kwl_zuluft_motor_u_min` | Zuluftmotor Drehzahl | rpm |
-| `sensor.kwl_abluft_motor_u_min` | Abluftmotor Drehzahl | rpm |
-| `sensor.kwl_zuluft_motor_spannung` | Zuluftmotor Spannung | V |
-| `sensor.kwl_abluft_motor_spannung` | Abluftmotor Spannung | V |
-| `sensor.kwl_aktuelle_leistung` | Aktuelle Leistungsaufnahme | W |
-| `sensor.kwl_energie_stufe_1` | Kumulativer Verbrauch Stufe 1 | kWh |
-| `sensor.kwl_energie_stufe_2` | Kumulativer Verbrauch Stufe 2 | kWh |
-| `sensor.kwl_energie_stufe_3` | Kumulativer Verbrauch Stufe 3 | kWh |
-| `sensor.kwl_energie_stufe_4` | Kumulativer Verbrauch Stufe 4 | kWh |
-| `sensor.kwl_aktuelle_stufe` | Aktuelle Stufe als Text | — |
-| `sensor.kwl_bypass_status` | Bypass-Status | — |
-| `sensor.kwl_systemmeldung` | Aktuelle Systemmeldung | — |
-| `sensor.kwl_party_timer_restzeit` | Party-Timer Restzeit | min |
+| `_abluft_temperatur` | Ablufttemperatur (Innenluft) | °C |
+| `_zuluft_temperatur` | Zulufttemperatur (nach Wärmetauscher) | °C |
+| `_aussenluft_temperatur` | Außenlufttemperatur | °C |
+| `_fortluft_temperatur` | Fortlufttemperatur (raus) | °C |
+| `_zuluft_motor_u_min` | Zuluftmotor Drehzahl | rpm |
+| `_abluft_motor_u_min` | Abluftmotor Drehzahl | rpm |
+| `_zuluft_motor_spannung` | Zuluftmotor Spannung | V |
+| `_abluft_motor_spannung` | Abluftmotor Spannung | V |
+| `_aktuelle_leistung` | Aktuelle Leistungsaufnahme | W |
+| `_energie_stufe_1` bis `_4` | Kumulativer Verbrauch pro Stufe | kWh |
+| `_aktuelle_stufe` | Aktuelle Stufe als Text | — |
+| `_bypass_status` | Bypass-Status | — |
+| `_systemmeldung` | Aktuelle Systemmeldung | — |
+| `_party_timer_restzeit` | Party-Timer Restzeit | min |
 
 **Standardmäßig deaktiviert** (aktivierbar unter Einstellungen → Geräte):
-| Entity | Beschreibung | Einheit |
+| Entity (Suffix) | Beschreibung | Einheit |
 |--------|-------------|---------|
-| `sensor.kwl_betriebsstunden_stufe_1` | Betriebsstunden Stufe 1 | h |
-| `sensor.kwl_betriebsstunden_stufe_2` | Betriebsstunden Stufe 2 | h |
-| `sensor.kwl_betriebsstunden_stufe_3` | Betriebsstunden Stufe 3 | h |
-| `sensor.kwl_betriebsstunden_stufe_4` | Betriebsstunden Stufe 4 | h |
-| `sensor.kwl_betriebsstunden_frostschutz` | Betriebsstunden Frostschutz | h |
-| `sensor.kwl_betriebsstunden_vorheizregister` | Betriebsstunden Vorheizregister | h |
+| `_betriebsstunden_stufe_1` bis `_4` | Betriebsstunden pro Stufe | h |
+| `_betriebsstunden_frostschutz` | Betriebsstunden Frostschutz | h |
+| `_betriebsstunden_vorheizregister` | Betriebsstunden Vorheizregister | h |
 
 ### Binary Sensoren
-| Entity | Beschreibung |
+| Entity (Suffix) | Beschreibung |
 |--------|-------------|
-| `binary_sensor.kwl_filter_ok` | Filterstatus (Problem = Filter wechseln) |
-| `binary_sensor.kwl_safety_manager` | Safety Manager aktiv |
-| `binary_sensor.kwl_passivhaus_modus` | Passivhaus-Modus aktiv |
-| `binary_sensor.kwl_vorheizregister_aktiv` | Vorheizregister aktiv |
+| `_filter_ok` | Filterstatus (Problem = Filter wechseln) |
+| `_safety_manager` | Safety Manager aktiv |
+| `_passivhaus_modus` | Passivhaus-Modus aktiv |
+| `_vorheizregister_aktiv` | Vorheizregister aktiv |
 
 ### Einstellungen (Number)
-| Entity | Beschreibung | Bereich |
+| Entity (Suffix) | Beschreibung | Bereich |
 |--------|-------------|---------|
-| `number.kwl_party_timer_nachlauf` | Party-Timer Dauer | 10–240 min |
-| `number.kwl_bypass_schwelle_aussenluft` | Bypass-Auslösung Außenluft | 13–18 °C |
-| `number.kwl_bypass_schwelle_abluft` | Bypass-Auslösung Abluft | 18–25 °C |
-| `number.kwl_kalibrierung_abluft` | Temperaturkorrektur Abluft | ±4.9 °C |
-| `number.kwl_kalibrierung_zuluft` | Temperaturkorrektur Zuluft | ±4.9 °C |
-| `number.kwl_kalibrierung_fortluft` | Temperaturkorrektur Fortluft | ±4.9 °C |
-| `number.kwl_kalibrierung_aussenluft` | Temperaturkorrektur Außenluft | ±4.9 °C |
+| `_party_timer_nachlauf` | Party-Timer Dauer | 10–240 min |
+| `_bypass_schwelle_aussenluft` | Bypass-Auslösung Außenluft | 13–18 °C |
+| `_bypass_schwelle_abluft` | Bypass-Auslösung Abluft | 18–25 °C |
+| `_kalibrierung_abluft` | Temperaturkorrektur Abluft | ±4.9 °C |
+| `_kalibrierung_zuluft` | Temperaturkorrektur Zuluft | ±4.9 °C |
+| `_kalibrierung_fortluft` | Temperaturkorrektur Fortluft | ±4.9 °C |
+| `_kalibrierung_aussenluft` | Temperaturkorrektur Außenluft | ±4.9 °C |
 
 **Standardmäßig deaktiviert** (nur für Experten):
-| Entity | Beschreibung | Bereich |
-|--------|-------------|---------|
-| `number.kwl_luftmenge_stufe_*_zuluft` | Lüfterleistung Zuluft je Stufe | 0–10 V |
-| `number.kwl_luftmenge_stufe_*_abluft` | Lüfterleistung Abluft je Stufe | 0–10 V |
+
+Luftmengen-Konfiguration pro Stufe (Zuluft + Abluft, 0–10 V)
 
 ### Auswahl (Select)
-| Entity | Optionen |
+| Entity (Suffix) | Optionen |
 |--------|---------|
-| `select.kwl_bypass_steuerung` | Manuell offen / Manuell zu / Automatisch |
-| `select.kwl_haustyp` | Eigenheim / Mietwohnung |
-| `select.kwl_vorheizregister_modus` | Aktiv / Passiv |
-| `select.kwl_safety_manager` | Mit / Ohne |
-| `select.kwl_ext_sensor_1_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
-| `select.kwl_ext_sensor_2_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
-| `select.kwl_ext_sensor_3_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
-| `select.kwl_ext_sensor_4_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
+| `_bypass_steuerung` | Manuell offen / Manuell zu / Automatisch |
+| `_haustyp` | Eigenheim / Mietwohnung |
+| `_vorheizregister_modus` | Aktiv / Passiv |
+| `_safety_manager` | Mit / Ohne |
+| `_ext_sensor_1_typ` bis `_4_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
 
 ### Buttons
-| Entity | Beschreibung |
+| Entity (Suffix) | Beschreibung |
 |--------|-------------|
-| `button.kwl_filterfehler_bestaetigen` | Filterwechsel-Alarm quittieren |
-| `button.kwl_externe_sensoren_umschalten` | Externe Sensoren ein-/ausschalten |
+| `_filterfehler_bestaetigen` | Filterwechsel-Alarm quittieren |
+| `_externe_sensoren_umschalten` | Externe Sensoren ein-/ausschalten |
 
 ---
 
 ## Energie-Dashboard
 
-Die vier Energie-Sensoren können direkt im HA Energie-Dashboard als **Individuelle Geräte** eingetragen werden. HA summiert den Tages- und Monatsverbrauch automatisch.
+Die vier Energie-Sensoren können direkt im HA Energie-Dashboard als **Individuelle Geräte** eingetragen werden:
 
-**Einstellungen → Energie → Individuelle Geräte → Gerät hinzufügen:**
-- `sensor.kwl_energie_stufe_1`
-- `sensor.kwl_energie_stufe_2`
-- `sensor.kwl_energie_stufe_3`
-- `sensor.kwl_energie_stufe_4`
+**Einstellungen → Energie → Individuelle Geräte → Gerät hinzufügen**
+
+Sensor-Namen: `sensor.kwl_fraenkische_rohrwerke_energie_stufe_1` bis `_4`
 
 ---
 
@@ -184,7 +180,7 @@ automation:
   actions:
     - action: fan.set_preset_mode
       target:
-        entity_id: fan.kwl_lueftung
+        entity_id: fan.kwl_fraenkische_rohrwerke
       data:
         preset_mode: "Stufe 3 - Nennlueeftung"
 ```
@@ -198,21 +194,21 @@ automation:
       at: "22:00:00"
   conditions:
     - condition: numeric_state
-      entity_id: sensor.kwl_abluft_temperatur
+      entity_id: sensor.kwl_fraenkische_rohrwerke_abluft_temperatur
       above: 22
     - condition: template
       value_template: >
-        {{ states('sensor.kwl_aussenluft_temperatur') | float(0)
-           < states('sensor.kwl_abluft_temperatur') | float(0) - 2 }}
+        {{ states('sensor.kwl_fraenkische_rohrwerke_aussenluft_temperatur') | float(0)
+           < states('sensor.kwl_fraenkische_rohrwerke_abluft_temperatur') | float(0) - 2 }}
   actions:
     - action: select.select_option
       target:
-        entity_id: select.kwl_bypass_steuerung
+        entity_id: select.kwl_fraenkische_rohrwerke_bypass_steuerung
       data:
         option: "Manuell offen"
     - action: fan.set_preset_mode
       target:
-        entity_id: fan.kwl_lueftung
+        entity_id: fan.kwl_fraenkische_rohrwerke
       data:
         preset_mode: "Stufe 3 - Nennlueeftung"
 ```
@@ -222,7 +218,7 @@ automation:
 automation:
   triggers:
     - trigger: state
-      entity_id: binary_sensor.kwl_filter_ok
+      entity_id: binary_sensor.kwl_fraenkische_rohrwerke_filter_ok
       to: "on"
   actions:
     - action: notify.mobile_app
@@ -248,8 +244,10 @@ automation:
 
 ## Fehlerbehebung
 
-### Integration taucht nicht auf
-Entwicklerwerkzeuge → YAML → Template-Entities neu laden, dann HA neu starten.
+### Integration lädt nicht / Setup failed
+Prüfe den HA-Log unter **Einstellungen → System → Protokolle**. Häufige Ursachen:
+- Falsche Dateien kopiert → kompletten `kwl_fraenkische/` Ordner ersetzen und HA neu starten
+- HA-Version zu alt → mindestens 2026.3 erforderlich
 
 ### Verbindungsfehler bei der Einrichtung
 - KWL und HA müssen im gleichen Netzwerk sein
@@ -261,6 +259,16 @@ Entwicklerwerkzeuge → YAML → Template-Entities neu laden, dann HA neu starte
 curl -s http://10.10.4.1/status.xml | head -5
 ```
 Gibt das XML zurück? Wenn nein, ist die KWL nicht erreichbar.
+
+### Automation schlägt mit `not_valid_preset_mode` fehl
+Die Preset-Namen müssen exakt stimmen — keine Umlaute:
+```
+Stufe 1 - Feuchteschutz
+Stufe 2 - Reduziert
+Stufe 3 - Nennlueeftung
+Stufe 4 - Intensivlueeftung
+```
+Prüfen: **Entwicklerwerkzeuge → Zustände → `fan.kwl_fraenkische_rohrwerke`** → Attribut `preset_modes`
 
 ### Falsche Zugangsdaten (401)
 HA zeigt automatisch einen Re-Auth Dialog. Alternativ:
@@ -283,7 +291,7 @@ Sensitive Daten (Passwort, MAC) werden automatisch geschwärzt.
 
 ## Changelog
 
-### v0.1.0 (2026-05)
+### v1.0.0 (2026-05-20)
 - Erstveröffentlichung
 - Lüftungsstufen 1–4 als Fan-Entity mit Prozent und Preset-Modi
 - Vollständiges Sensor-Mapping (Temperaturen, Motor, Energie)
@@ -291,7 +299,10 @@ Sensitive Daten (Passwort, MAC) werden automatisch geschwärzt.
 - Automatische Zeitsynchronisation mit DST
 - HTTP Basic Auth für Installateur-Bereich
 - Re-Auth Flow und Reconfigure Flow
-- 109 Unit-Tests
+- Konfigurierbare Nennleistung pro Stufe im Setup-Wizard
+- Repair Issue für Filterwechsel mit automatischer Quittierung
+- Diagnostics mit Redacting sensitiver Daten
+- 117 Unit-Tests, Quality Scale: 🏆 Platinum
 
 ---
 
