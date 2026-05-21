@@ -464,6 +464,9 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
             configuration_url=f"http://{host}",
         )
 
+        # Initialized to None; populated on first successful poll via _discover_capabilities()
+        self.capabilities: KWLCapabilities | None = None
+
     async def async_setup(self) -> None:
         """Wird nach dem ersten erfolgreichen Datenabruf aufgerufen.
 
