@@ -33,7 +33,7 @@ STEP_AUTH_SCHEMA = vol.Schema(
 )
 
 
-class KWLConfigFlow(ConfigFlow, domain=DOMAIN):
+class KWLConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Zweistufiger Config Flow:
     Schritt 1 -- IP-Adresse eingeben und Verbindung pruefen
     Schritt 2 -- Installateur-Zugangsdaten eingeben und pruefen
@@ -47,7 +47,7 @@ class KWLConfigFlow(ConfigFlow, domain=DOMAIN):
         self._username: str = ""
         self._password: str = ""
 
-    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, str] | None = None) -> ConfigFlowResult:
         """Schritt 1: IP-Adresse."""
         errors: dict[str, str] = {}
 
@@ -69,7 +69,7 @@ class KWLConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_auth(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_auth(self, user_input: dict[str, str] | None = None) -> ConfigFlowResult:
         """Schritt 2: Installateur-Zugangsdaten."""
         errors: dict[str, str] = {}
 

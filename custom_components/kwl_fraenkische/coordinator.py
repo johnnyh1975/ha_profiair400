@@ -1,7 +1,10 @@
 """DataUpdateCoordinator fuer die Fraenkische Rohrwerke KWL-Integration."""
 from __future__ import annotations
 
+import asyncio
+from typing import Any, Protocol
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 from xml.etree import ElementTree
 
@@ -16,9 +19,104 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import (
+    ALL_KNOWN_TAGS,
+    DOMAIN,
+    ENDPOINT_INSTALL,
+    ENDPOINT_TIME,
+    ENDPOINT_WOPLA,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+# ── KWLCapabilities ──────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class KWLCapabilities:
+    """Erkannte Faehigkeiten der KWL -- ermittelt beim ersten Poll."""
+
+    available_tags: frozenset[str]
+    unknown_tags: frozenset[str]
+    reachable_endpoints: frozenset[str]
+
+    @property
+    def has_motor_sensors(self) -> bool:
+        return "MoStZlUm" in self.available_tags
+
+    @property
+    def has_airflow_voltage(self) -> bool:
+        return "st1z" in self.available_tags
+
+    @property
+    def has_temp_corrections(self) -> bool:
+        return "kor1" in self.available_tags
+
+    @property
+    def has_ext_sensors(self) -> bool:
+        return "sensortyp1" in self.available_tags
+
+    @property
+    def has_filter_lifetime(self) -> bool:
+        return "rest_time" in self.available_tags
+
+    @property
+    def has_operating_hours(self) -> bool:
+        return "BsSt1" in self.available_tags
+
+    @property
+    def has_safety_manager(self) -> bool:
+        return "safety" in self.available_tags
+
+    @property
+    def has_preheater(self) -> bool:
+        return "vorheiz" in self.available_tags
+
+    @property
+    def has_language_select(self) -> bool:
+        return "SprachWahl" in self.available_tags
+
+    @property
+    def has_installer_access(self) -> bool:
+        return ENDPOINT_INSTALL in self.reachable_endpoints
+
+    @property
+    def has_time_sync(self) -> bool:
+        return ENDPOINT_TIME in self.reachable_endpoints
+
+    @property
+    def has_program_control(self) -> bool:
+        return ENDPOINT_WOPLA in self.reachable_endpoints
+
+    def summary(self) -> str:
+        parts = []
+        if self.has_motor_sensors: parts.append("Motor-Diagnostik")
+        if self.has_airflow_voltage: parts.append("Airflow-Kalibrierung")
+        if self.has_temp_corrections: parts.append("Temp-Korrekturen")
+        if self.has_ext_sensors: parts.append("Ext.Sensoren")
+        if self.has_filter_lifetime: parts.append("Filter-Restlaufzeit")
+        if self.has_installer_access: parts.append("Installer")
+        if self.has_time_sync: parts.append("Zeitsync")
+        if self.has_program_control: parts.append("Wochenplan")
+        return (
+            f"{len(parts)} Features: {', '.join(parts)}"
+            + (f" | {len(self.unknown_tags)} unbekannte Tags" if self.unknown_tags else "")
+        )
+
+
+class _SupportedDesc(Protocol):
+    required_tag: str | None
+    required_endpoint: str | None
+
+
+def _is_supported(desc: _SupportedDesc, caps: KWLCapabilities) -> bool:
+    """True wenn EntityDescription von dieser Firmware unterstuetzt wird."""
+    if getattr(desc, "required_tag", None) and desc.required_tag not in caps.available_tags:
+        return False
+    if getattr(desc, "required_endpoint", None) and desc.required_endpoint not in caps.reachable_endpoints:
+        return False
+    return True
+
+
 
 SCAN_INTERVAL = timedelta(seconds=30)
 TIME_SYNC_INTERVAL = timedelta(hours=24)
@@ -58,7 +156,7 @@ def _parse_korrektur(value: str | None) -> float | None:
     return round(raw / 10, 1)
 
 
-def _build_time_payload(now) -> dict[str, str]:
+def _build_time_payload(now: Any) -> dict[str, str]:
     """Baut den timesubmit-String nach dem Geraete-Format auf.
 
     Format: J{JJ}M{MM}T{TT}W{W}h{hh}m{mm}s{ss}
@@ -86,7 +184,7 @@ def _build_time_payload(now) -> dict[str, str]:
     return {"timesubmit": time_str}
 
 
-def _build_dst_payload(now) -> dict[str, str]:
+def _build_dst_payload(now: Any) -> dict[str, str]:
     """Bestimmt ob Sommerzeit aktiv ist und gibt den passenden POST-Wert zurueck."""
     # dst_offset > 0 bedeutet Sommerzeit aktiv
     is_dst = bool(now.dst() and now.dst().total_seconds() > 0)
@@ -226,6 +324,28 @@ class KWLData:
         return _parse_int(self._raw.get("BsVhr"))
 
     @property
+    def filter_total_days(self) -> int | None:
+        """Gesamtlaufzeit bis Filtertausch in Tagen (filtertime)."""
+        return _parse_int(self._raw.get("filtertime"))
+
+    @property
+    def filter_residual_days(self) -> int | None:
+        """Verbleibende Tage bis Filtertausch (rest_time)."""
+        return _parse_int(self._raw.get("rest_time"))
+
+    @property
+    def language(self) -> str | None:
+        """Aktuelle Spracheinstellung (SprachWahl)."""
+        v = self._raw.get("SprachWahl", "")
+        return v.strip() if v else None
+
+    @property
+    def program_control(self) -> str | None:
+        """Programm- oder Handsteuerung (control0)."""
+        v = self._raw.get("control0", "")
+        return v.strip() if v else None
+
+    @property
     def control_mode(self) -> str:
         return self._raw.get("control0", "").strip()
 
@@ -361,11 +481,14 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
         )
         _LOGGER.debug("KWL Zeitsynchronisation eingerichtet (alle 24h)")
 
-    async def _async_sync_time_callback(self, _now=None) -> None:
+    async def _async_sync_time_callback(self, _now: object = None) -> None:
         """Callback fuer den 24h-Timer."""
         await self._async_sync_time()
 
     async def _async_sync_time(self) -> None:
+        if self.capabilities and not self.capabilities.has_time_sync:
+            _LOGGER.debug("Zeitsync nicht verfuegbar -- Endpunkt nicht erreichbar")
+            return
         """Sendet die aktuelle HA-Systemzeit und DST-Status an die KWL.
 
         Verwendet die HA-Zeitzone (dt_util.now()) damit Sommer-/Winterzeit
@@ -402,6 +525,41 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
             )
         except aiohttp.ClientError as err:
             _LOGGER.warning("KWL Zeitsynchronisation fehlgeschlagen: %s", err)
+
+    async def _discover_capabilities(self, raw: dict[str, str]) -> None:
+        """Erkennt Capabilities der KWL beim ersten Poll."""
+        available = frozenset(raw.keys())
+
+        # Endpunkte parallel testen (Timeout je 3s)
+        install_ok, time_ok, wopla_ok = await asyncio.gather(
+            self._probe_endpoint(ENDPOINT_INSTALL),
+            self._probe_endpoint(ENDPOINT_TIME),
+            self._probe_endpoint(ENDPOINT_WOPLA),
+        )
+        reachable: set[str] = set()
+        if install_ok: reachable.add(ENDPOINT_INSTALL)
+        if time_ok:    reachable.add(ENDPOINT_TIME)
+        if wopla_ok:   reachable.add(ENDPOINT_WOPLA)
+
+        unknown = available - ALL_KNOWN_TAGS
+
+        self.capabilities = KWLCapabilities(
+            available_tags=available,
+            unknown_tags=unknown,
+            reachable_endpoints=frozenset(reachable),
+        )
+        _LOGGER.info("KWL Discovery abgeschlossen: %s", self.capabilities.summary())
+
+    async def _probe_endpoint(self, path: str) -> bool:
+        """Gibt True zurueck wenn Endpunkt existiert (nicht 404)."""
+        try:
+            url = f"http://{self.host}{path}"
+            async with self._get_session().get(
+                url, timeout=aiohttp.ClientTimeout(total=3)
+            ) as resp:
+                return resp.status != 404
+        except Exception:
+            return False
 
     def async_teardown(self) -> None:
         """Raeumt den Zeitsync-Listener auf beim Entladen der Integration."""
@@ -446,11 +604,24 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
         else:
             ir.async_delete_issue(self.hass, DOMAIN, "filter_needs_replacement")
 
+        # Discovery beim ersten Poll
+        if self.capabilities is None:
+            await self._discover_capabilities(raw)
+
+        # unknown_tags loggen
+        unknown = frozenset(raw.keys()) - ALL_KNOWN_TAGS
+        if unknown:
+            _LOGGER.info(
+                "Unbekannte XML-Tags gefunden (neue Firmware?): %s -- "
+                "Bitte GitHub Issue eroeffnen: https://github.com/johnnyh1975/ha_profiair400/issues",
+                sorted(unknown)
+            )
+
         return data
 
     def _get_session(self) -> aiohttp.ClientSession:
         """Gibt die HA-verwaltete aiohttp Session zurueck."""
-        return self._session
+        return self._session  # type: ignore[no-any-return]
 
     async def async_set_level(self, level: int) -> None:
         if level not in (1, 2, 3, 4):
@@ -472,6 +643,8 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
         await self._post(f"http://{self.host}/setup.htm", payload, auth=None)
 
     async def async_post_install(self, payload: dict[str, str]) -> None:
+        if self.capabilities and not self.capabilities.has_installer_access:
+            raise HomeAssistantError("Installer-Bereich nicht verfuegbar auf diesem Geraet")
         await self._post(
             f"http://{self.host}/install/install.htm",
             payload,

@@ -70,6 +70,33 @@
           }
         }
       }
+    },
+    "sensor": {
+      "filter_total_days": {
+        "name": "Filter total lifetime"
+      },
+      "filter_residual_days": {
+        "name": "Filter remaining lifetime"
+      }
+    },
+    "select": {
+      "language": {
+        "name": "Language",
+        "state": {
+          "Deutsch": "German",
+          "English": "English",
+          "Francais": "French",
+          "Italiano": "Italian",
+          "Nederlands": "Dutch"
+        }
+      },
+      "program_control": {
+        "name": "Control mode",
+        "state": {
+          "Manual": "Manual",
+          "Program": "Program"
+        }
+      }
     }
   },
   "issues": {

@@ -70,6 +70,33 @@
           }
         }
       }
+    },
+    "sensor": {
+      "filter_total_days": {
+        "name": "Filter Gesamtlaufzeit"
+      },
+      "filter_residual_days": {
+        "name": "Filter Restlaufzeit"
+      }
+    },
+    "select": {
+      "language": {
+        "name": "Sprache",
+        "state": {
+          "Deutsch": "Deutsch",
+          "English": "Englisch",
+          "Francais": "Französisch",
+          "Italiano": "Italienisch",
+          "Nederlands": "Niederländisch"
+        }
+      },
+      "program_control": {
+        "name": "Steuerungsmodus",
+        "state": {
+          "Manual": "Manuell",
+          "Program": "Programm"
+        }
+      }
     }
   },
   "issues": {

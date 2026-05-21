@@ -7,6 +7,34 @@ Die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.1.0] - 2026-05-21
+
+### Added
+- **Capability Discovery** — automatically detects supported features on first poll
+  - Reads available XML tags from `status.xml`
+  - Probes `/install/install.htm`, `/time.htm`, `/wopla.htm` in parallel
+  - Only creates entities for features the firmware actually supports
+  - Works with all Profi-Air firmware versions (Touch, non-Touch, old, new)
+- **`required_tag` / `required_endpoint`** on all EntityDescriptions
+  - Motor sensors only created if `MoStZlUm` tag present
+  - Temperature corrections only if `kor1` tag present
+  - Installer entities only if `/install/install.htm` reachable
+  - Program control only if `/wopla.htm` reachable
+- **Unknown tag detection** — new firmware tags logged with GitHub issue link
+- **Diagnostics extended** — full capabilities report including available tags,
+  reachable endpoints, unknown tags and feature flags
+- **34 new capability tests** — full and minimal firmware fixtures
+
+### Changed
+- Time sync silently skipped if `/time.htm` not reachable
+- `async_post_install` raises `HomeAssistantError` if installer not reachable
+- `manifest.json` version bumped to `1.1.0`
+
+### Fixed
+- All 6 platforms now filter entities by capabilities at setup time
+
+---
+
 ## [1.0.0] - 2026-05-19
 
 ### Hinzugefügt

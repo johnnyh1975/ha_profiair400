@@ -1,6 +1,8 @@
 """Fan-Entity fuer die KWL-Lueeftungsanlage."""
 from __future__ import annotations
 
+from typing import cast
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -92,7 +94,7 @@ class KWLFan(CoordinatorEntity[KWLCoordinator], FanEntity):
         if self._optimistic_level is not None:
             return self._optimistic_level
         if self.coordinator.data is not None:
-            return self.coordinator.data.current_level
+            return int(self.coordinator.data.current_level)
         return 1
 
     @property
@@ -113,7 +115,7 @@ class KWLFan(CoordinatorEntity[KWLCoordinator], FanEntity):
         return LEVEL_TO_PRESET.get(self._current_level)
 
     @property
-    def extra_state_attributes(self) -> dict:
+    def extra_state_attributes(self) -> dict[str, object]:
         attrs: dict = {}
         if self._optimistic_level is not None:
             attrs["optimistic"] = True

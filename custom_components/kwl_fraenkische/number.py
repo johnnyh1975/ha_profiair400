@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import KWLConfigEntry
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
 
@@ -23,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import KWLCoordinator, KWLData
+from .coordinator import KWLCapabilities, KWLCoordinator, KWLData, _is_supported
 
 PARALLEL_UPDATES = 1
 
@@ -42,6 +42,8 @@ class KWLNumberDescription(NumberEntityDescription):
     format_fn: Callable[[float], str] = str
     # Standardmaessig sichtbar? False = nur fuer Experten
     entity_registry_enabled_default: bool = True
+    required_tag: str | None = field(default=None)
+    required_endpoint: str | None = field(default=None)
 
 
 def _two_digits(v: float) -> str:
@@ -107,6 +109,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
 
     KWLNumberDescription(
         key="korrektur_abluft",
+        required_tag="kor1",
         name="Kalibrierung Abluft",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -121,6 +124,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="korrektur_zuluft",
+        required_tag="kor2",
         name="Kalibrierung Zuluft",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -135,6 +139,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="korrektur_fortluft",
+        required_tag="kor3",
         name="Kalibrierung Fortluft",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -149,6 +154,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="korrektur_aussenluft",
+        required_tag="kor4",
         name="Kalibrierung Aussenluft",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -169,6 +175,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
 
     KWLNumberDescription(
         key="airflow_s1_supply",
+        required_tag="st1z",
         name="Luftmenge Stufe 1 Zuluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -184,6 +191,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s1_exhaust",
+        required_tag="st1z",
         name="Luftmenge Stufe 1 Abluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -199,6 +207,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s2_supply",
+        required_tag="st1z",
         name="Luftmenge Stufe 2 Zuluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -214,6 +223,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s2_exhaust",
+        required_tag="st1z",
         name="Luftmenge Stufe 2 Abluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -229,6 +239,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s3_supply",
+        required_tag="st1z",
         name="Luftmenge Stufe 3 Zuluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -244,6 +255,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s3_exhaust",
+        required_tag="st1z",
         name="Luftmenge Stufe 3 Abluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -259,6 +271,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s4_supply",
+        required_tag="st1z",
         name="Luftmenge Stufe 4 Zuluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -274,6 +287,7 @@ NUMBERS: tuple[KWLNumberDescription, ...] = (
     ),
     KWLNumberDescription(
         key="airflow_s4_exhaust",
+        required_tag="st1z",
         name="Luftmenge Stufe 4 Abluft",
         device_class=NumberDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -296,10 +310,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: KWLCoordinator = entry.runtime_data
+    caps = coordinator.capabilities
     mac = entry.data.get("mac", entry.entry_id)
+    supported = [d for d in NUMBERS if caps is None or _is_supported(d, caps)]
     async_add_entities(
         KWLNumber(coordinator, entry, description, mac)
-        for description in NUMBERS
+        for description in supported
     )
 
 

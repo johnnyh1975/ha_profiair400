@@ -3,179 +3,297 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.3%2B-blue.svg)](https://www.home-assistant.io/)
 [![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Platinum-silver.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+[![Tests](https://img.shields.io/badge/Tests-151%20passing-brightgreen.svg)](.github/workflows/validate.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.1.0-blue.svg)](CHANGELOG.md)
 
-Macht die **Fränkische Rohrwerke KWL** (Profi-Air) smart — ohne Cloud, ohne externen Dienst, ausschließlich über das lokale Netzwerk.
+Local-only Home Assistant integration for **Fränkische Rohrwerke Profi-Air** ventilation units. No cloud, no external services — talks directly to your KWL over HTTP, the same way the built-in web interface does.
 
 ![Fränkische Rohrwerke](brand/logo.png)
 
 ---
 
-## Funktionen
+## Table of Contents
 
-- **Lüftungsstufen 1–4** steuerbar als Fan-Entity mit Prozent-Schieberegler und Preset-Modi
-- **Automatische Zeitsynchronisation** — beim Start und alle 24 Stunden, inkl. Sommer-/Winterzeit
-- **Energie-Dashboard** — kumulativer kWh-Verbrauch pro Stufe basierend auf Betriebsstunden
-- **Vollständiges Sensor-Mapping** — Temperaturen, Motor-RPM, Motorspannung
-- **Bypass-Steuerung** — Manuell offen / Manuell zu / Automatisch
-- **Temperaturkorrekturen** für alle vier Messfühler
-- **HTTP Basic Auth** für den geschützten Installateur-Bereich
-- **Optimistic Updates** — UI reagiert sofort ohne auf den nächsten Poll zu warten
-- **Re-Auth Flow** — automatische Aufforderung bei abgelaufenen Zugangsdaten
-- **Rekonfigurierung** — IP-Adresse und Zugangsdaten ohne Neueinrichtung änderbar
-- **Repair Issue** — Filterwechsel-Alarm mit automatischer Quittierung am Gerät
-- **Konfigurierbare Nennleistung** — Watt-Werte pro Stufe im Setup-Wizard einstellbar
+- [Why this integration?](#why-this-integration)
+- [Supported devices](#supported-devices)
+- [How Capability Discovery works](#how-capability-discovery-works)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Setup](#setup)
+- [Entities](#entities)
+- [Energy Dashboard](#energy-dashboard)
+- [Automation examples](#automation-examples)
+- [Feature comparison](#feature-comparison)
+- [Troubleshooting](#troubleshooting)
+- [HTTP endpoints](#http-endpoints-reference)
+- [Known limitations](#known-limitations)
+- [Changelog](#changelog)
 
 ---
 
-## Unterstützte Geräte
+## Why this integration?
 
-Getestet mit der **Fränkische Rohrwerke Profi-Air** KWL-Anlage mit integriertem Webserver.
+Most smart home integrations for ventilation systems depend on cloud services or proprietary apps. This integration uses your KWL's built-in HTTP interface — **your data never leaves your home network**.
 
-Das Gerät muss über HTTP erreichbar sein (Standard: `http://10.10.4.1`). Eine Internetverbindung ist nicht erforderlich.
+Beyond basic control, this integration brings genuinely intelligent ventilation:
+
+- **Weather-aware cooling** — open bypass only when tomorrow's forecast exceeds your threshold
+- **Presence-aware scheduling** — drop to minimum level when everyone leaves
+- **CO2-responsive ventilation** — boost automatically when sensors trigger
+- **Energy tracking** — cumulative kWh per level in the HA Energy Dashboard
+
+The built-in weekly schedule on the device cannot do any of this. HA automations can.
+
+---
+
+## Supported devices
+
+This integration works with **all Fränkische Rohrwerke Profi-Air models** that expose an HTTP interface on your local network. It automatically detects what your firmware supports and creates only the relevant entities.
+
+| Model | Interface | Entities |
+|-------|-----------|----------|
+| Profi-Air 400 (classic firmware) | `/status.xml` + installer area | Full — motor, corrections, ext. sensors, installer |
+| Profi-Air 250 Touch | `/status.xml` | Core — temperatures, bypass, filter, energy |
+| Profi-Air 400 Touch | `/status.xml` | Core — temperatures, bypass, filter, energy |
+| Other Profi-Air models with HTTP | `/status.xml` | Auto-detected — open an issue if something is missing |
+
+> **Profi-Air 250 Touch** and **Profi-Air 400 Touch** users: this integration works with your device. Capability Discovery automatically detects what your firmware supports and skips entities that are not available.
+
+> Not sure which model you have? If `http://YOUR_KWL_IP/status.xml` returns XML data, this integration will work.
+
+---
+
+## How Capability Discovery works
+
+Since v1.1.0, the integration **automatically discovers** what your device supports on first startup — no manual configuration required.
+
+```
+First startup
+      ↓
+Poll /status.xml → inventory all XML tags
+      ↓
+Probe 3 endpoints in parallel (3 s timeout each):
+    /install/install.htm  →  installer area available?
+    /time.htm             →  time sync supported?
+    /wopla.htm            →  program control available?
+      ↓
+Build KWLCapabilities — frozen snapshot of device features
+      ↓
+Each platform filters its entity list:
+    required_tag missing    → entity not created
+    required_endpoint down  → entity not created
+      ↓
+Only working entities appear in HA — zero unavailable clutter
+```
+
+**What this means in practice:**
+
+- A full-featured firmware gets all entities (motor RPM, installer settings, corrections, external sensors…)
+- A minimal firmware (newer Touch) gets only the entities that actually work
+- If a firmware update adds new XML tags, a restart picks them up automatically
+- Unknown tags are logged and shown in Diagnostics — please open a GitHub issue so we can add support
+
+---
+
+## Features
+
+### Control
+- **Ventilation levels 1–4** — fan entity with percentage slider, preset modes and optimistic UI updates
+- **Bypass control** — Manual open / Manual closed / Automatic
+- **Control mode** — switch between Weekly Program and Manual *(if `/wopla.htm` reachable)*
+- **Party timer** — configurable duration 10–240 min
+- **Language selection** — DE / EN / FR / IT / NL
+- **Temperature corrections** — calibrate all four sensors ±4.9 °C *(if firmware supports)*
+- **Airflow calibration** — per-level supply and exhaust tuning *(if firmware supports, disabled by default)*
+- **Installer settings** — bypass thresholds, house type, pre-heater, safety manager, external sensors via HTTP Basic Auth *(if installer area reachable)*
+
+### Monitoring
+- **All four temperatures** — outdoor, supply (after heat exchanger), exhaust (indoor), extract (outgoing)
+- **Motor RPM and voltage** — supply and exhaust motors *(if firmware supports)*
+- **Current power** — real-time watts based on active level (configurable per device)
+- **Cumulative energy** — kWh per level, ready for HA Energy Dashboard
+- **Filter status** — OK / needs replacement (binary sensor + automatic repair issue)
+- **Filter lifetime** — total and remaining days *(if firmware supports)*
+- **Operating hours** — per level, frost protection, pre-heater *(disabled by default)*
+- **Safety manager, passive mode, pre-heater** — binary sensors *(if firmware supports)*
+- **External sensor values** — up to 4 CO2 or humidity sensors *(if firmware supports)*
+- **System message, bypass status, party timer, current level text**
+
+### Smart home integration
+- **Automatic time sync** — on startup and every 24 hours, DST-aware *(if firmware supports)*
+- **Energy dashboard** — four kWh sensors compatible with HA Energy panel
+- **Re-auth flow** — HA prompts for new credentials automatically on 401
+- **Reconfigure flow** — change IP or credentials without reinstalling
+- **Repair issue** — filter alert with one-click acknowledgement in HA UI
+- **Download diagnostics** — full capability report, sensitive data auto-redacted
+
+### Quality
+- 🏆 **HA Integration Quality Scale: Platinum**
+- **151 automated tests** — unit, config flow, capability discovery
+- **Full translations** — 🇩🇪 German and 🇬🇧 English
+- **GitHub Actions CI** — HACS validation + Hassfest + pytest on Python 3.12/3.13
+
+---
+
+## Requirements
+
+- Home Assistant **2026.3** or newer
+- KWL reachable via HTTP on your local network (typically `http://10.10.4.1`)
+- No internet connection required
 
 ---
 
 ## Installation
 
-### Über HACS (empfohlen)
+### Via HACS (recommended)
 
-1. HACS öffnen → Integrationen → ⋮ → Benutzerdefinierte Repositories
-2. URL eintragen: `https://github.com/johnnyh1975/ha-kwl-fraenkische`
-3. Kategorie: Integration → Hinzufügen
-4. Integration suchen und installieren
-5. Home Assistant neu starten
+1. Open HACS → Integrations → ⋮ → Custom repositories
+2. Add URL: `https://github.com/johnnyh1975/ha-kwl-fraenkische`
+3. Category: Integration → Add
+4. Search for **KWL Fränkische Rohrwerke** and install
+5. Restart Home Assistant
 
-### Manuell
+### Manual
 
-1. Den Ordner `custom_components/kwl_fraenkische/` in dein HA-Konfigurationsverzeichnis kopieren
-2. Home Assistant neu starten
+1. Copy the `custom_components/kwl_fraenkische/` folder into your HA config directory
+2. Restart Home Assistant
 
 ---
 
-## Einrichtung
+## Setup
 
-1. **Einstellungen → Geräte & Dienste → Integration hinzufügen**
-2. Nach **KWL Fränkische Rohrwerke** suchen
-3. **Schritt 1:** IP-Adresse der KWL eingeben (Standard: `10.10.4.1`)
-4. **Schritt 2:** Installateur-Zugangsdaten eingeben
-   - Benutzer: `install`
-   - Passwort: `konfig12` *(Werkseinstellung — bitte ändern!)*
-5. **Schritt 3:** Nennleistung pro Stufe bestätigen oder anpassen
-   - Standardwerte gelten für die Profi-Air 400: 11 / 17.5 / 43.5 / 80 W
-   - Eigene Werte können mit einer Strommesszange gemessen werden
+1. **Settings → Devices & Services → Add Integration**
+2. Search for **KWL Fränkische Rohrwerke**
+3. **Step 1 — IP address:** Enter the IP of your KWL (default: `10.10.4.1`)
+4. **Step 2 — Credentials:** Enter installer credentials *(only shown if installer area detected)*
+   - Factory default: Username `install` / Password `konfig12`
+5. **Step 3 — Power values:** Confirm or adjust watt per level
+   - Defaults for Profi-Air 400: **11 / 17.5 / 43.5 / 80 W**
+   - Measure with a clamp meter for accurate energy tracking
 
-> ⚠️ **Sicherheitshinweis:** Die Werkseinstellungen (`install` / `konfig12`) sind öffentlich bekannt. Bitte das Passwort direkt am Gerät unter `http://10.10.4.1/setup.htm` ändern.
+> ⚠️ **Security:** Factory credentials `install` / `konfig12` are publicly known. Change the password at `http://YOUR_KWL_IP/setup.htm` before or immediately after setup.
 
-### Neu konfigurieren
+### Upgrade from v1.0.0 to v1.1.0
 
-IP-Adresse oder Zugangsdaten können ohne Neueinrichtung geändert werden:
-**Einstellungen → Geräte & Dienste → KWL → ⋮ → Neu konfigurieren**
+Simply install the new version via HACS and restart HA. Capability Discovery runs automatically on the first poll — no reconfiguration needed. All existing entities are preserved; new capability-dependent entities are added if your firmware supports them.
+
+### Reconfigure
+
+Change IP or credentials without reinstalling:
+**Settings → Devices & Services → KWL → ⋮ → Reconfigure**
 
 ---
 
 ## Entities
 
-Alle Entities gehören zu einem einzigen Gerät **KWL** (identifiziert über die MAC-Adresse). Die Entity-IDs werden von HA aus dem Gerätenamen und dem Entitätsnamen generiert — typisch: `sensor.kwl_fraenkische_rohrwerke_abluft_temperatur`.
+All entities belong to a single **KWL** device identified by MAC address. Entity IDs follow the pattern `domain.kwl_fraenkische_rohrwerke_<suffix>`.
+
+Entities marked *(firmware)* are only created if your device's firmware exposes the required data — see [Capability Discovery](#how-capability-discovery-works).
 
 ### Fan
-| Entity | Beschreibung |
+| Entity | Description |
 |--------|-------------|
-| `fan.kwl_fraenkische_rohrwerke` | Lüftungssteuerung mit Stufe 1–4, Prozent und Preset-Modus |
+| `fan.kwl_fraenkische_rohrwerke` | Ventilation — levels 1–4, percentage, preset mode |
 
-**Preset-Modi** — exakte Namen für Automationen:
-| Preset | Stufe | Prozent | Leistung (konfigurierbar) |
-|--------|-------|---------|--------------------------|
-| `Stufe 1 - Feuchteschutz` | 1 | 25% | Standard: 11 W |
-| `Stufe 2 - Reduziert` | 2 | 50% | Standard: 17.5 W |
-| `Stufe 3 - Nennlueeftung` | 3 | 75% | Standard: 43.5 W |
-| `Stufe 4 - Intensivlueeftung` | 4 | 100% | Standard: 80 W |
+**Preset modes** — use these exact strings in automations (no umlauts):
+| Preset | Level | % | Default power |
+|--------|-------|----|---------------|
+| `Stufe 1 - Feuchteschutz` | 1 | 25% | 11 W |
+| `Stufe 2 - Reduziert` | 2 | 50% | 17.5 W |
+| `Stufe 3 - Nennlueeftung` | 3 | 75% | 43.5 W |
+| `Stufe 4 - Intensivlueeftung` | 4 | 100% | 80 W |
 
-> ⚠️ Die Preset-Namen enthalten keine Umlaute (`Nennlueeftung`, `Intensivlueeftung`). Automationen müssen exakt diese Schreibweise verwenden.
+> ⚠️ Use `Nennlueeftung` not `Nennlüftung` — no umlauts in preset names.
 
-### Sensoren
-| Entity (Suffix) | Beschreibung | Einheit |
-|--------|-------------|---------|
-| `_abluft_temperatur` | Ablufttemperatur (Innenluft) | °C |
-| `_zuluft_temperatur` | Zulufttemperatur (nach Wärmetauscher) | °C |
-| `_aussenluft_temperatur` | Außenlufttemperatur | °C |
-| `_fortluft_temperatur` | Fortlufttemperatur (raus) | °C |
-| `_zuluft_motor_u_min` | Zuluftmotor Drehzahl | rpm |
-| `_abluft_motor_u_min` | Abluftmotor Drehzahl | rpm |
-| `_zuluft_motor_spannung` | Zuluftmotor Spannung | V |
-| `_abluft_motor_spannung` | Abluftmotor Spannung | V |
-| `_aktuelle_leistung` | Aktuelle Leistungsaufnahme | W |
-| `_energie_stufe_1` bis `_4` | Kumulativer Verbrauch pro Stufe | kWh |
-| `_aktuelle_stufe` | Aktuelle Stufe als Text | — |
-| `_bypass_status` | Bypass-Status | — |
-| `_systemmeldung` | Aktuelle Systemmeldung | — |
-| `_party_timer_restzeit` | Party-Timer Restzeit | min |
+### Sensors
+| Suffix | Description | Unit | Firmware |
+|--------|-------------|------|----------|
+| `_aussenluft_temperatur` | Outdoor air temperature | °C | all |
+| `_zuluft_temperatur` | Supply air temperature (after heat exchanger) | °C | all |
+| `_abluft_temperatur` | Exhaust air temperature (indoor) | °C | all |
+| `_fortluft_temperatur` | Extract air temperature (outgoing) | °C | all |
+| `_aktuelle_leistung` | Current power consumption | W | all |
+| `_energie_stufe_1` to `_4` | Cumulative energy per level | kWh | all |
+| `_filter_gesamtlaufzeit` | Filter total lifetime | days | if supported |
+| `_filter_restlaufzeit` | Filter remaining lifetime | days | if supported |
+| `_aktuelle_stufe` | Current level (text) | — | all |
+| `_bypass_status` | Bypass status | — | all |
+| `_systemmeldung` | System message | — | all |
+| `_party_timer_restzeit` | Party timer remaining | min | all |
+| `_zuluft_motor_u_min` | Supply motor RPM | rpm | if supported |
+| `_abluft_motor_u_min` | Exhaust motor RPM | rpm | if supported |
+| `_zuluft_motor_spannung` | Supply motor voltage | V | if supported |
+| `_abluft_motor_spannung` | Exhaust motor voltage | V | if supported |
 
-**Standardmäßig deaktiviert** (aktivierbar unter Einstellungen → Geräte):
-| Entity (Suffix) | Beschreibung | Einheit |
-|--------|-------------|---------|
-| `_betriebsstunden_stufe_1` bis `_4` | Betriebsstunden pro Stufe | h |
-| `_betriebsstunden_frostschutz` | Betriebsstunden Frostschutz | h |
-| `_betriebsstunden_vorheizregister` | Betriebsstunden Vorheizregister | h |
+**Disabled by default** (enable under Settings → Devices → KWL → sensors):
+| Suffix | Description | Unit |
+|--------|-------------|------|
+| `_betriebsstunden_stufe_1` to `_4` | Operating hours per level | h |
+| `_betriebsstunden_frostschutz` | Frost protection hours | h |
+| `_betriebsstunden_vorheizregister` | Pre-heater hours | h |
 
-### Binary Sensoren
-| Entity (Suffix) | Beschreibung |
-|--------|-------------|
-| `_filter_ok` | Filterstatus (Problem = Filter wechseln) |
-| `_safety_manager` | Safety Manager aktiv |
-| `_passivhaus_modus` | Passivhaus-Modus aktiv |
-| `_vorheizregister_aktiv` | Vorheizregister aktiv |
+### Binary sensors
+| Suffix | Description | Firmware |
+|--------|-------------|----------|
+| `_filter_ok` | Filter OK / needs replacement | all |
+| `_safety_manager` | Safety manager active | if supported |
+| `_passivhaus_modus` | Passive house mode active | if supported |
+| `_vorheizregister_aktiv` | Pre-heater active | if supported |
 
-### Einstellungen (Number)
-| Entity (Suffix) | Beschreibung | Bereich |
-|--------|-------------|---------|
-| `_party_timer_nachlauf` | Party-Timer Dauer | 10–240 min |
-| `_bypass_schwelle_aussenluft` | Bypass-Auslösung Außenluft | 13–18 °C |
-| `_bypass_schwelle_abluft` | Bypass-Auslösung Abluft | 18–25 °C |
-| `_kalibrierung_abluft` | Temperaturkorrektur Abluft | ±4.9 °C |
-| `_kalibrierung_zuluft` | Temperaturkorrektur Zuluft | ±4.9 °C |
-| `_kalibrierung_fortluft` | Temperaturkorrektur Fortluft | ±4.9 °C |
-| `_kalibrierung_aussenluft` | Temperaturkorrektur Außenluft | ±4.9 °C |
+### Number entities
+| Suffix | Description | Range | Firmware |
+|--------|-------------|-------|----------|
+| `_party_timer_nachlauf` | Party timer duration | 10–240 min | all |
+| `_bypass_schwelle_aussenluft` | Bypass trigger — outdoor temp | 13–18 °C | all |
+| `_bypass_schwelle_abluft` | Bypass trigger — exhaust temp | 18–25 °C | all |
+| `_kalibrierung_abluft` | Exhaust temp correction | ±4.9 °C | if supported |
+| `_kalibrierung_zuluft` | Supply temp correction | ±4.9 °C | if supported |
+| `_kalibrierung_fortluft` | Extract temp correction | ±4.9 °C | if supported |
+| `_kalibrierung_aussenluft` | Outdoor temp correction | ±4.9 °C | if supported |
 
-**Standardmäßig deaktiviert** (nur für Experten):
+Airflow voltage calibration per level — disabled by default, installer firmware only.
 
-Luftmengen-Konfiguration pro Stufe (Zuluft + Abluft, 0–10 V)
-
-### Auswahl (Select)
-| Entity (Suffix) | Optionen |
-|--------|---------|
-| `_bypass_steuerung` | Manuell offen / Manuell zu / Automatisch |
-| `_haustyp` | Eigenheim / Mietwohnung |
-| `_vorheizregister_modus` | Aktiv / Passiv |
-| `_safety_manager` | Mit / Ohne |
-| `_ext_sensor_1_typ` bis `_4_typ` | Keiner / Feuchte (%H) / CO2 (ppm) |
+### Select entities
+| Suffix | Options | Firmware |
+|--------|---------|----------|
+| `_bypass_steuerung` | Manuell offen / Manuell zu / Automatisch | all |
+| `_steuerungsmodus` | Manual / Program | if `/wopla.htm` reachable |
+| `_sprache` | Deutsch / English / Francais / Italiano / Nederlands | all |
+| `_haustyp` | Eigenheim / Mietwohnung | installer only |
+| `_vorheizregister_modus` | Aktiv / Passiv | installer only |
+| `_safety_manager` | Mit / Ohne | installer only |
+| `_ext_sensor_1_typ` to `_4_typ` | Keiner / Feuchte (%H) / CO2 (ppm) | if supported |
 
 ### Buttons
-| Entity (Suffix) | Beschreibung |
-|--------|-------------|
-| `_filterfehler_bestaetigen` | Filterwechsel-Alarm quittieren |
-| `_externe_sensoren_umschalten` | Externe Sensoren ein-/ausschalten |
+| Suffix | Description | Firmware |
+|--------|-------------|----------|
+| `_filterfehler_bestaetigen` | Acknowledge filter alert | all |
+| `_externe_sensoren_umschalten` | Toggle external sensors | if supported |
 
 ---
 
-## Energie-Dashboard
+## Energy Dashboard
 
-Die vier Energie-Sensoren können direkt im HA Energie-Dashboard als **Individuelle Geräte** eingetragen werden:
+Add the four energy sensors as **Individual devices** in the HA Energy panel:
 
-**Einstellungen → Energie → Individuelle Geräte → Gerät hinzufügen**
+**Settings → Energy → Individual devices → Add device**
 
-Sensor-Namen: `sensor.kwl_fraenkische_rohrwerke_energie_stufe_1` bis `_4`
+Add all four: `sensor.kwl_fraenkische_rohrwerke_energie_stufe_1` through `_4`
+
+HA automatically sums daily and monthly totals. Combined with the operating hours sensors you get a full picture of how your KWL distributes runtime across levels.
 
 ---
 
-## Automatisierungsbeispiele
+## Automation examples
 
-### Lüftung bei hoher CO2-Konzentration hochschalten
+### Increase ventilation on high CO2
 ```yaml
 automation:
   triggers:
     - trigger: numeric_state
-      entity_id: sensor.co2_wohnzimmer
+      entity_id: sensor.co2_living_room
       above: 1000
   actions:
     - action: fan.set_preset_mode
@@ -185,10 +303,10 @@ automation:
         preset_mode: "Stufe 3 - Nennlueeftung"
 ```
 
-### Sommer-Nacht-Vorkühlung (Bypass + Stufe 3)
+### Summer night pre-cooling (bypass + level 3)
 ```yaml
 automation:
-  alias: "KWL Bypass Sommer-Kühlung"
+  alias: "KWL Summer Night Cooling"
   triggers:
     - trigger: time
       at: "22:00:00"
@@ -200,6 +318,9 @@ automation:
       value_template: >
         {{ states('sensor.kwl_fraenkische_rohrwerke_aussenluft_temperatur') | float(0)
            < states('sensor.kwl_fraenkische_rohrwerke_abluft_temperatur') | float(0) - 2 }}
+    - condition: numeric_state
+      entity_id: sensor.dwd_tagesmax_temperatur_morgen
+      above: input_number.kwl_bypass_hitze_schwelle
   actions:
     - action: select.select_option
       target:
@@ -213,7 +334,30 @@ automation:
         preset_mode: "Stufe 3 - Nennlueeftung"
 ```
 
-### Benachrichtigung bei Filterproblem
+### Morning — close bypass, reduce to level 1
+```yaml
+automation:
+  alias: "KWL Summer Morning"
+  triggers:
+    - trigger: time
+      at: "08:00:00"
+  conditions:
+    - condition: template
+      value_template: "{{ now().month in [5, 6, 7, 8, 9] }}"
+  actions:
+    - action: select.select_option
+      target:
+        entity_id: select.kwl_fraenkische_rohrwerke_bypass_steuerung
+      data:
+        option: "Automatisch"
+    - action: fan.set_preset_mode
+      target:
+        entity_id: fan.kwl_fraenkische_rohrwerke
+      data:
+        preset_mode: "Stufe 1 - Feuchteschutz"
+```
+
+### Filter replacement notification
 ```yaml
 automation:
   triggers:
@@ -223,89 +367,168 @@ automation:
   actions:
     - action: notify.mobile_app
       data:
-        message: "KWL: Filter muss gewechselt werden!"
+        message: "KWL: Filter replacement needed!"
 ```
 
----
-
-## HTTP-Endpunkte
-
-| Endpunkt | Methode | Auth | Beschreibung |
-|----------|---------|------|-------------|
-| `/status.xml` | GET | — | Alle Statuswerte (Poll alle 30 s) |
-| `/stufe.cgi?stufe=N` | GET | — | Lüftungsstufe 1–4 setzen |
-| `/setup.htm` | POST | — | Benutzereinstellungen |
-| `/time.htm` | POST | — | Zeitsynchronisation |
-| `/filter.cgi?filter=1` | GET | — | Filterfehler quittieren |
-| `/sensor.cgi?sensor=1` | GET | — | Externe Sensoren umschalten |
-| `/install/install.htm` | POST | Basic Auth | Installateureinstellungen |
+> **Tip:** Instead of this automation, use the built-in **Repair Issue** — HA shows a persistent notification with a one-click fix that automatically acknowledges the alert on the device.
 
 ---
 
-## Fehlerbehebung
+## Feature comparison
 
-### Integration lädt nicht / Setup failed
-Prüfe den HA-Log unter **Einstellungen → System → Protokolle**. Häufige Ursachen:
-- Falsche Dateien kopiert → kompletten `kwl_fraenkische/` Ordner ersetzen und HA neu starten
-- HA-Version zu alt → mindestens 2026.3 erforderlich
+### This integration vs. profi-air-touch
 
-### Verbindungsfehler bei der Einrichtung
-- KWL und HA müssen im gleichen Netzwerk sein
-- Browser-Test: `http://10.10.4.1/status.xml` muss XML zurückgeben
-- Bei Docker: Netzwerkmodus `host` prüfen
+| Feature | This integration | [profi-air-touch](https://github.com/desue90/profi-air-touch) |
+|---------|:---:|:---:|
+| **Target models** | Profi-Air 400 classic, 250 Touch, 400 Touch (all auto-detected) | Profi-Air 250/400 Touch only |
+| **Capability auto-detection** | ✅ v1.1.0 | ❌ |
+| **Firmware-adaptive entities** | ✅ | ❌ |
+| **DataUpdateCoordinator** | ✅ | ❌ planned |
+| **Single poll for all entities** | ✅ | ❌ per-entity polls |
+| **MAC as stable device ID** | ✅ | ❌ hardcoded string |
+| **Connection test on setup** | ✅ | ❌ |
+| **Re-auth flow** | ✅ | ❌ |
+| **Reconfigure flow** | ✅ | ❌ |
+| **Repair issues** | ✅ | ❌ |
+| **Diagnostics with capability report** | ✅ | ❌ |
+| **Time synchronisation** | ✅ auto-detected | ❌ |
+| **Energy kWh sensors** | ✅ | ❌ |
+| **Binary sensors** | ✅ | ❌ |
+| **Motor RPM + voltage** | ✅ if firmware | ❌ |
+| **Installer settings (BasicAuth)** | ✅ if firmware | ❌ |
+| **Configurable watt values** | ✅ | ❌ |
+| **Optimistic updates** | ✅ | ❌ |
+| **Filter remaining days** | ✅ | ✅ |
+| **Language select** | ✅ | ✅ |
+| **Program/Manual control** | ✅ | ✅ |
+| **Unit tests** | ✅ 151 | ❌ |
+| **Quality Scale** | 🏆 Platinum | not declared |
 
-### Entity bleibt `unavailable`
+### Feature availability by firmware version
+
+| Feature | Full firmware | Minimal firmware |
+|---------|:---:|:---:|
+| All 4 temperatures | ✅ | ✅ |
+| Bypass control | ✅ | ✅ |
+| Filter status (OK/replace) | ✅ | ✅ |
+| Filter remaining days | ✅ | ✅ |
+| Language select | ✅ | ✅ |
+| Program/Manual control | ✅ | ✅ |
+| Energy kWh sensors | ✅ | ✅ |
+| Operating hours per level | ✅ | ✅ |
+| Motor RPM + voltage | ✅ | ❌ auto-hidden |
+| Airflow voltage calibration | ✅ | ❌ auto-hidden |
+| Temperature corrections | ✅ | ❌ auto-hidden |
+| External sensors (CO2/humidity) | ✅ | ❌ auto-hidden |
+| Safety manager | ✅ | ❌ auto-hidden |
+| Pre-heater register | ✅ | ❌ auto-hidden |
+| Installer settings (BasicAuth) | ✅ | ❌ auto-hidden |
+| Time synchronisation | ✅ | depends on firmware |
+
+**Auto-hidden** = entity is simply not created. No `unavailable` state, no clutter in your dashboard.
+
+---
+
+## Troubleshooting
+
+### Integration fails to load
+Check **Settings → System → Logs**. Common causes:
+- Wrong files copied → replace the entire `kwl_fraenkische/` folder and restart HA
+- HA version too old → 2026.3 minimum required
+
+### Cannot connect during setup
+- KWL and HA must be on the same network segment
+- Browser test: `http://YOUR_KWL_IP/status.xml` must return XML
+- Docker: check `host` network mode
+
+### Entity unavailable
 ```bash
 curl -s http://10.10.4.1/status.xml | head -5
 ```
-Gibt das XML zurück? Wenn nein, ist die KWL nicht erreichbar.
+No XML response → KWL not reachable. Check network and IP address.
 
-### Automation schlägt mit `not_valid_preset_mode` fehl
-Die Preset-Namen müssen exakt stimmen — keine Umlaute:
+### Expected entity not appearing
+Since v1.1.0, entities are only created if your firmware supports them. Check what was detected:
+
+**Settings → Devices & Services → KWL → ⋮ → Download diagnostics**
+
+Look at `capabilities.available_tags` and `capabilities.reachable_endpoints` — if the required tag or endpoint is missing, the entity won't be created. To refresh after a firmware update: restart HA.
+
+### Automation fails with `not_valid_preset_mode`
+Preset names must match exactly — no umlauts:
 ```
 Stufe 1 - Feuchteschutz
 Stufe 2 - Reduziert
 Stufe 3 - Nennlueeftung
 Stufe 4 - Intensivlueeftung
 ```
-Prüfen: **Entwicklerwerkzeuge → Zustände → `fan.kwl_fraenkische_rohrwerke`** → Attribut `preset_modes`
+Verify: **Developer Tools → States → `fan.kwl_fraenkische_rohrwerke`** → attribute `preset_modes`
 
-### Falsche Zugangsdaten (401)
-HA zeigt automatisch einen Re-Auth Dialog. Alternativ:
-**Einstellungen → Geräte & Dienste → KWL → ⋮ → Neu authentifizieren**
+### Wrong credentials (401)
+HA shows a re-auth dialog automatically. Or manually:
+**Settings → Devices & Services → KWL → ⋮ → Re-authenticate**
 
-### Diagnose herunterladen
-**Einstellungen → Geräte & Dienste → KWL → ⋮ → Diagnose herunterladen**
-Sensitive Daten (Passwort, MAC) werden automatisch geschwärzt.
+### Download diagnostics
+**Settings → Devices & Services → KWL → ⋮ → Download diagnostics**
+
+Includes: capability report, available tags, reachable endpoints, unknown tags, current sensor values. Password and MAC are automatically redacted.
 
 ---
 
-## Bekannte Einschränkungen
+## HTTP endpoints reference
 
-- Die KWL kann **nicht ausgeschaltet** werden — Stufe 1 ist der Mindestbetrieb
-- Der Wochenplan des Geräts wird nicht in HA abgebildet — besser HA-Automationen nutzen
-- Externe Sensoren (CO2, Feuchte) werden nur angezeigt wenn am Gerät angeschlossen und konfiguriert
-- Auto-Discovery nicht möglich — die KWL hat kein mDNS/SSDP
+| Endpoint | Method | Auth | Description | Auto-detected |
+|----------|--------|------|-------------|:---:|
+| `/status.xml` | GET | — | All status values (polled every 30 s) | always |
+| `/stufe.cgi?stufe=N` | GET | — | Set ventilation level 1–4 | always |
+| `/setup.htm` | POST | — | User settings (bypass, language, corrections) | always |
+| `/wopla.htm` | POST | — | Weekly program / manual control switch | ✅ probed |
+| `/time.htm` | POST | — | Time synchronisation | ✅ probed |
+| `/filter.cgi?filter=1` | GET | — | Acknowledge filter alert | always |
+| `/sensor.cgi?sensor=1` | GET | — | Toggle external sensors | always |
+| `/install/install.htm` | POST | Basic Auth | Installer settings | ✅ probed |
+
+Probed endpoints are tested once on startup (3 s timeout). If unreachable, they are never called again — no wasted requests.
+
+---
+
+## Known limitations
+
+- The KWL **cannot be switched off** — level 1 is the minimum operation
+- The device's built-in weekly schedule is not imported into HA — use HA automations for scheduling (more powerful anyway)
+- External sensors (CO2, humidity) only appear when physically connected and configured on the device
+- Auto-discovery of the KWL IP is not possible — no mDNS/SSDP on the device
 
 ---
 
 ## Changelog
 
+### v1.1.0 (2026-05-21)
+- **Capability Discovery** — automatic detection of supported features on first poll
+- **Firmware-adaptive entities** — only entities for features your device actually supports
+- `required_tag` / `required_endpoint` on all EntityDescriptions
+- Parallel endpoint probing on startup (3 s timeout, zero overhead in normal operation)
+- Unknown firmware tags logged and shown in diagnostics
+- Diagnostics extended with full capability report
+- Time sync and installer access silently skipped if endpoint not reachable
+- 34 new capability tests — 151 total
+
 ### v1.0.0 (2026-05-20)
-- Erstveröffentlichung
-- Lüftungsstufen 1–4 als Fan-Entity mit Prozent und Preset-Modi
-- Vollständiges Sensor-Mapping (Temperaturen, Motor, Energie)
-- Bypass-Steuerung, Temperaturkorrekturen, Luftmengen-Einstellung
-- Automatische Zeitsynchronisation mit DST
-- HTTP Basic Auth für Installateur-Bereich
-- Re-Auth Flow und Reconfigure Flow
-- Konfigurierbare Nennleistung pro Stufe im Setup-Wizard
-- Repair Issue für Filterwechsel mit automatischer Quittierung
-- Diagnostics mit Redacting sensitiver Daten
-- 117 Unit-Tests, Quality Scale: 🏆 Platinum
+- Initial release
+- Ventilation levels 1–4 as fan entity with percentage and preset modes
+- Full sensor mapping — temperatures, motor data, filter lifetime, energy
+- Language selection and program/manual control mode
+- Bypass control, temperature corrections, airflow calibration
+- Automatic time synchronisation with DST
+- HTTP Basic Auth for installer area
+- Re-auth and reconfigure flows
+- Configurable nominal power per level in setup wizard
+- Repair issue for filter replacement with automatic acknowledgement
+- Diagnostics with sensitive data redaction
+- 117 automated tests, Quality Scale: 🏆 Platinum
 
 ---
 
-## Lizenz
+## License
 
-MIT License — siehe [LICENSE](LICENSE)
+MIT License — see [LICENSE](LICENSE)

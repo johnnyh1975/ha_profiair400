@@ -6,7 +6,7 @@ gewechselt werden muss oder andere Probleme auftreten.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 
@@ -67,10 +67,10 @@ class FilterRepairFlow(RepairsFlow):
                 except Exception as err:
                     _LOGGER.warning("Fehler beim Quittieren: %s", err)
 
-            return self.async_create_entry(data={})
+            return self.async_create_entry(data={})  # type: ignore[no-any-return]
 
-        return self.async_show_form(
+        return cast(dict[str, Any], self.async_show_form(
             step_id="confirm",
             data_schema=vol.Schema({}),
             description_placeholders={},
-        )
+        ))

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import KWLConfigEntry
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import aiohttp
 
@@ -16,8 +16,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import KWLCoordinator
+from .const import DOMAIN, ENDPOINT_INSTALL, ENDPOINT_WOPLA
+from .coordinator import KWLCapabilities, KWLCoordinator, _is_supported
 
 PARALLEL_UPDATES = 1
 
@@ -50,10 +50,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: KWLCoordinator = entry.runtime_data
+    caps = coordinator.capabilities
     mac = entry.data.get("mac", entry.entry_id)
+    supported = [d for d in BUTTONS if caps is None or _is_supported(d, caps)]
     async_add_entities(
         KWLButton(coordinator, entry, description, mac)
-        for description in BUTTONS
+        for description in supported
     )
 
 
@@ -77,7 +79,7 @@ class KWLButton(CoordinatorEntity[KWLCoordinator], ButtonEntity):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.last_update_success
+        return bool(self.coordinator.last_update_success)
 
     async def async_press(self) -> None:
         """GET-Request ausfuehren und danach Coordinator aktualisieren."""

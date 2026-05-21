@@ -48,9 +48,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: KWLConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: KWLConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok: bool = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator: KWLCoordinator = entry.runtime_data
         coordinator.async_teardown()
         await coordinator.async_close_session()
-    return unload_ok
+    return bool(unload_ok)

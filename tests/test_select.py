@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 import sys, os
+from dataclasses import dataclass, field
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'custom_components'))
 
 from kwl_fraenkische.select import (

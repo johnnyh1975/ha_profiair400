@@ -39,11 +39,12 @@ class MockDataUpdateCoordinator:
         self.data = None
         self.last_update_success = True
         self.update_interval = update_interval
+        self.capabilities = None
 
     def __class_getitem__(cls, item):
         return cls
 
-from dataclasses import dataclass as _dataclass, field as _field
+from dataclasses import dataclass, field, dataclass as _dataclass, field as _field
 
 from typing import Any as _Any
 
@@ -176,6 +177,8 @@ SAMPLE_XML = """<response>
   <BsSt1>133582</BsSt1><BsSt2>16324</BsSt2>
   <BsSt3>34944</BsSt3><BsSt4>75</BsSt4>
   <BsFs>122</BsFs><BsVhr>0</BsVhr>
+  <filtertime>180</filtertime>
+  <rest_time>45</rest_time>
   <kor1> 00</kor1><kor2> 00</kor2><kor3> 00</kor3><kor4> 00</kor4>
   <safety>Nicht aktiv </safety>
   <passiv>Aus</passiv>
@@ -198,3 +201,58 @@ SAMPLE_XML = """<response>
 @pytest.fixture
 def sample_xml():
     return SAMPLE_XML
+
+
+# ── Capability fixtures ───────────────────────────────────────────────────────
+
+MINIMAL_XML = """<response>
+  <stufe1>1</stufe1><stufe2>0</stufe2><stufe3>0</stufe3><stufe4>0</stufe4>
+  <aktuell0>Stufe1 Feuchteschutz</aktuell0>
+  <control0>manuelle Stufenwahl</control0>
+  <bypass>Auto: Offen</bypass>
+  <partytime>120</partytime>
+  <BipaAutAUL> 15.0</BipaAutAUL>
+  <BipaAutABL> 22.0</BipaAutABL>
+  <abl0> 22.1</abl0><zul0> 19.9</zul0><aul0> 18.8</aul0><fol0> 20.4</fol0>
+  <filter0>Filter ersetzt </filter0>
+  <filtertime>180</filtertime>
+  <rest_time>45</rest_time>
+  <SprachWahl>lang1</SprachWahl>
+  <config_mac>00:04:A3:76:23:66</config_mac>
+  <config_ip>10.10.4.1</config_ip>
+</response>"""
+
+
+@pytest.fixture
+def minimal_xml():
+    """Minimale status.xml -- Touch-Firmware ohne Motor/Installer etc."""
+    return MINIMAL_XML
+
+
+@pytest.fixture
+def full_capabilities():
+    """KWLCapabilities fuer voll ausgestattete Firmware (non-Touch)."""
+    from kwl_fraenkische.coordinator import KWLCapabilities
+    from kwl_fraenkische.const import (
+        ALL_KNOWN_TAGS, ENDPOINT_INSTALL, ENDPOINT_TIME, ENDPOINT_WOPLA
+    )
+    from kwl_fraenkische.coordinator import _parse_xml
+    raw = _parse_xml(SAMPLE_XML)
+    return KWLCapabilities(
+        available_tags=frozenset(raw.keys()),
+        unknown_tags=frozenset(),
+        reachable_endpoints=frozenset({ENDPOINT_INSTALL, ENDPOINT_TIME, ENDPOINT_WOPLA}),
+    )
+
+
+@pytest.fixture
+def minimal_capabilities():
+    """KWLCapabilities fuer minimale Firmware (Touch / neuere Version)."""
+    from kwl_fraenkische.coordinator import KWLCapabilities, _parse_xml
+    from kwl_fraenkische.const import ENDPOINT_WOPLA
+    raw = _parse_xml(MINIMAL_XML)
+    return KWLCapabilities(
+        available_tags=frozenset(raw.keys()),
+        unknown_tags=frozenset(),
+        reachable_endpoints=frozenset({ENDPOINT_WOPLA}),
+    )

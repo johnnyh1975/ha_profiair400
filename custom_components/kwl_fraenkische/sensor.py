@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import KWLConfigEntry
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from homeassistant.components.sensor import (
@@ -27,8 +27,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, LEVEL_TO_WATT
-from .coordinator import KWLCoordinator, KWLData
+from .const import DOMAIN, ENDPOINT_INSTALL, ENDPOINT_WOPLA, LEVEL_TO_WATT
+from .coordinator import KWLCapabilities, KWLCoordinator, KWLData, _is_supported
 
 PARALLEL_UPDATES = 0
 
@@ -39,6 +39,8 @@ class KWLSensorDescription(SensorEntityDescription):
     # force_update pro Sensor steuerbar -- True fuer Messwerte die sich
     # selten aendern aber trotzdem lueckenlos im Recorder landen sollen
     force_update: bool = False
+    required_tag: str | None = field(default=None)
+    required_endpoint: str | None = field(default=None)
 
 
 def _energy_kwh(hours: int | None, watt: float) -> float | None:
@@ -100,6 +102,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     # ------------------------------------------------------------------
     KWLSensorDescription(
         key="motor_zuluft_rpm",
+        required_tag="MoStZlUm",
         name="Zuluft Motor U/min",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
@@ -108,6 +111,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     ),
     KWLSensorDescription(
         key="motor_abluft_rpm",
+        required_tag="MoStAlUm",
         name="Abluft Motor U/min",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
@@ -116,6 +120,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     ),
     KWLSensorDescription(
         key="motor_zuluft_volt",
+        required_tag="MoStZlVo",
         name="Zuluft Motor Spannung",
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -125,6 +130,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     ),
     KWLSensorDescription(
         key="motor_abluft_volt",
+        required_tag="MoStAlVo",
         name="Abluft Motor Spannung",
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -191,6 +197,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     # ------------------------------------------------------------------
     KWLSensorDescription(
         key="hours_level_1",
+        required_tag="BsSt1",
         name="Betriebsstunden Stufe 1",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -225,8 +232,33 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
         entity_registry_enabled_default=False,
         value_fn=lambda d: d.hours_level_4,
     ),
+    # ------------------------------------------------------------------
+    # Filter Restlaufzeit -- aus der anderen Integration uebernommen
+    # ------------------------------------------------------------------
+    KWLSensorDescription(
+        key="filter_total_days",
+        required_tag="filtertime",
+        name="Filter Gesamtlaufzeit",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        icon="mdi:air-filter",
+        value_fn=lambda d: d.filter_total_days,
+    ),
+    KWLSensorDescription(
+        key="filter_residual_days",
+        required_tag="rest_time",
+        name="Filter Restlaufzeit",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        icon="mdi:air-filter",
+        value_fn=lambda d: d.filter_residual_days,
+    ),
+
     KWLSensorDescription(
         key="hours_frost",
+        required_tag="BsFs",
         name="Betriebsstunden Frostschutz",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -236,6 +268,7 @@ SENSORS: tuple[KWLSensorDescription, ...] = (
     ),
     KWLSensorDescription(
         key="hours_preheater",
+        required_tag="BsVhr",
         name="Betriebsstunden Vorheizregister",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -279,8 +312,10 @@ async def async_setup_entry(
 ) -> None:
     coordinator: KWLCoordinator = entry.runtime_data
     mac = entry.data.get("mac", entry.entry_id)
+    caps = coordinator.capabilities
+    supported = [d for d in SENSORS if caps is None or _is_supported(d, caps)]
     async_add_entities(
-        KWLSensor(coordinator, entry, description, mac) for description in SENSORS
+        KWLSensor(coordinator, entry, description, mac) for description in supported
     )
 
 
@@ -317,11 +352,12 @@ class KWLSensor(CoordinatorEntity[KWLCoordinator], SensorEntity):
         key = self.entity_description.key
         watt_map = self.coordinator.watt_map
         if key == "power_current":
-            return watt_map.get(self.coordinator.data.current_level)
+            result: float | None = watt_map.get(self.coordinator.data.current_level)
+            return result
         if key.startswith("energy_level_"):
             level = int(key[-1])
             hours = getattr(self.coordinator.data, f"hours_level_{level}", None)
             if hours is None:
                 return None
-            return round(hours * watt_map[level] / 1000, 2)
+            return float(round(hours * watt_map[level] / 1000, 2))
         return value

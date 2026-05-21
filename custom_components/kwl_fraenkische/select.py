@@ -15,8 +15,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import KWLCoordinator, KWLData
+from .const import DOMAIN, ENDPOINT_INSTALL, ENDPOINT_WOPLA
+from .coordinator import KWLCapabilities, KWLCoordinator, KWLData, _is_supported
 
 PARALLEL_UPDATES = 1
 
@@ -55,12 +55,14 @@ def _parse_bypass(raw: str) -> str | None:
 
 @dataclass(frozen=True, kw_only=True)
 class KWLSelectDescription(SelectEntityDescription):
-    options_map: dict[str, str] = field(default=None)   # HA-Option -> POST-Wert
-    reverse_map: dict[str, str] = field(default=None)   # Geraete-Text -> HA-Option
+    options_map: dict[str, str] | None = field(default=None)   # HA-Option -> POST-Wert
+    reverse_map: dict[str, str] | None = field(default=None)   # Geraete-Text -> HA-Option
     post_field: str = ""
-    post_url_fn: Callable[[str], str] = field(default=None)  # host -> URL
+    post_url_fn: Callable[[str], str] | None = field(default=None)  # host -> URL
     value_fn: Callable[[KWLData], str | None] = field(default=lambda d: None)
     entity_registry_enabled_default: bool = True
+    required_tag: str | None = field(default=None)
+    required_endpoint: str | None = field(default=None)
 
 
 def _setup_url(host: str) -> str:
@@ -68,6 +70,10 @@ def _setup_url(host: str) -> str:
 
 def _install_url(host: str) -> str:
     return f"http://{host}/install/install.htm"
+
+def _wopla_url(host: str) -> str:
+    """Wochenplan-Seite fuer Programm/Handsteuerung."""
+    return f"http://{host}/wopla.htm"
 
 
 SELECTS: tuple[KWLSelectDescription, ...] = (
@@ -200,10 +206,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: KWLCoordinator = entry.runtime_data
+    caps = coordinator.capabilities
     mac = entry.data.get("mac", entry.entry_id)
+    supported = [d for d in SELECTS if caps is None or _is_supported(d, caps)]
     async_add_entities(
         KWLSelect(coordinator, entry, description, mac)
-        for description in SELECTS
+        for description in supported
     )
 
 
@@ -250,11 +258,15 @@ class KWLSelect(CoordinatorEntity[KWLCoordinator], SelectEntity):
         return self.entity_description.value_fn(self.coordinator.data)
 
     async def async_select_option(self, option: str) -> None:
+        if not self.entity_description.options_map:
+            return
         post_value = self.entity_description.options_map.get(option)
         if post_value is None:
             return
 
         payload = {self.entity_description.post_field: post_value}
+        if self.entity_description.post_url_fn is None:
+            return
         url = self.entity_description.post_url_fn(self.coordinator.host)
 
         # Korrekte Methode je nach Endpunkt -- install.htm benoetigt BasicAuth

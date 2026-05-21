@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import KWLConfigEntry
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from homeassistant.components.binary_sensor import (
@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import KWLCoordinator, KWLData
+from .coordinator import KWLCapabilities, KWLCoordinator, KWLData, _is_supported
 
 PARALLEL_UPDATES = 0
 
@@ -28,6 +28,8 @@ PARALLEL_UPDATES = 0
 @dataclass(frozen=True, kw_only=True)
 class KWLBinarySensorDescription(BinarySensorEntityDescription):
     value_fn: Callable[[KWLData], bool | None] = lambda d: None
+    required_tag: str | None = field(default=None)
+    required_endpoint: str | None = field(default=None)
 
 
 BINARY_SENSORS: tuple[KWLBinarySensorDescription, ...] = (
@@ -39,18 +41,21 @@ BINARY_SENSORS: tuple[KWLBinarySensorDescription, ...] = (
     ),
     KWLBinarySensorDescription(
         key="safety_active",
+        required_tag="safety",
         name="Safety Manager",
         device_class=BinarySensorDeviceClass.SAFETY,
         value_fn=lambda d: d.safety_active,
     ),
     KWLBinarySensorDescription(
         key="passive_mode",
+        required_tag="passiv",
         name="Passivhaus-Modus",
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda d: d.passive_mode,
     ),
     KWLBinarySensorDescription(
         key="preheater_active",
+        required_tag="vorheiz",
         name="Vorheizregister aktiv",
         device_class=BinarySensorDeviceClass.HEAT,
         value_fn=lambda d: d.preheater_active,
@@ -65,9 +70,11 @@ async def async_setup_entry(
 ) -> None:
     coordinator: KWLCoordinator = entry.runtime_data
     mac = entry.data.get("mac", entry.entry_id)
+    caps = coordinator.capabilities
+    supported = [d for d in BINARY_SENSORS if caps is None or _is_supported(d, caps)]
     async_add_entities(
         KWLBinarySensor(coordinator, entry, description, mac)
-        for description in BINARY_SENSORS
+        for description in supported
     )
 
 
