@@ -46,7 +46,22 @@ ALL_KNOWN_TAGS: frozenset[str] = frozenset({
     "BipaAutAUL", "BipaAutABL",
     "stufe1", "stufe2", "stufe3", "stufe4",
     "SprachWahl",
+    # Digital inputs (firmware update)
+    "DiIn1", "DiIn2", "DiIn3",
+    # Passive heat recovery thresholds
+    "PassivHE", "PassivHA",
+    # Status (firmware update)
+    "sensor0", "soze", "time", "date", "events",
 })
+
+# Dynamically generated tags -- scheduler and UI strings
+ALL_KNOWN_TAGS = ALL_KNOWN_TAGS | frozenset(
+    [f"prg{i}" for i in range(1, 11)]
+    + [f"prg_start{i}" for i in range(1, 11)]
+    + [f"prg_stop{i}" for i in range(1, 11)]
+    + [f"prg_wota{i}" for i in range(1, 11)]
+    + [f"langtxt{i}" for i in range(0, 155)]
+)
 
 # Bekannte Endpunkte
 ENDPOINT_INSTALL = "/install/install.htm"

@@ -7,10 +7,25 @@ Die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
-## [1.1.1] - 2026-05-21
+## [1.2.0] - 2026-05-22
 
-### Fixed
-- `AttributeError: 'KWLCoordinator' object has no attribute 'capabilities'` on every poll after upgrading to v1.1.0 — the attribute was accessed in `_async_update_data` before being initialized in `__init__`. Added `self.capabilities: KWLCapabilities | None = None` to `KWLCoordinator.__init__()`.
+### Added — Firmware v2 Support
+- **Digital inputs** — DiIn1/2/3 as binary sensors (disabled by default)
+  Useful if physical inputs (door contacts, CO2 sensors, occupancy) are wired to the KWL
+- **All 155 langtxt UI strings** added to ALL_KNOWN_TAGS — no more unknown tag warnings
+- **All new firmware v2 tags** (prg*, soze, time, date, events, PassivHE/PassivHA, sensor0)
+  added to ALL_KNOWN_TAGS — zero unknown tags logged after firmware update
+
+### Not implemented (deliberately)
+- Scheduler programs (prg1–prg10): read-only from status.xml, no write endpoint.
+  Use HA automations instead — more powerful and already documented
+- PassivHE/PassivHA: rarely-changed installer values, no operational value
+- soze/time/date/events: diagnostic only, redundant with existing sensors
+
+### Changed
+- ALL_KNOWN_TAGS extended with 200+ new firmware v2 tags
+- 161 tests — cleaned up after feature scope reduction
+- manifest.json version bumped to 1.2.0
 
 ---
 

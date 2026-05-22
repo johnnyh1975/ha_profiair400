@@ -97,7 +97,19 @@
           "Program": "Programm"
         }
       }
-    }
+    },
+    "binary_sensor": {
+      "digital_input_1": {
+        "name": "Digitaleingang 1"
+      },
+      "digital_input_2": {
+        "name": "Digitaleingang 2"
+      },
+      "digital_input_3": {
+        "name": "Digitaleingang 3"
+      }
+    },
+    "number": {}
   },
   "issues": {
     "filter_needs_replacement": {

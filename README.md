@@ -3,7 +3,7 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.3%2B-blue.svg)](https://www.home-assistant.io/)
 [![Quality Scale](https://img.shields.io/badge/Quality%20Scale-Platinum-silver.svg)](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
-[![Tests](https://img.shields.io/badge/Tests-151%20passing-brightgreen.svg)](.github/workflows/validate.yaml)
+[![Tests](https://img.shields.io/badge/Tests-161%20passing-brightgreen.svg)](.github/workflows/validate.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-1.1.0-blue.svg)](CHANGELOG.md)
 
@@ -131,7 +131,7 @@ Only working entities appear in HA — zero unavailable clutter
 
 ### Quality
 - 🏆 **HA Integration Quality Scale: Platinum**
-- **151 automated tests** — unit, config flow, capability discovery
+- **161 automated tests** — unit, config flow, capability discovery
 - **Full translations** — 🇩🇪 German and 🇬🇧 English
 - **GitHub Actions CI** — HACS validation + Hassfest + pytest on Python 3.12/3.13
 
@@ -174,6 +174,10 @@ Only working entities appear in HA — zero unavailable clutter
    - Measure with a clamp meter for accurate energy tracking
 
 > ⚠️ **Security:** Factory credentials `install` / `konfig12` are publicly known. Change the password at `http://YOUR_KWL_IP/setup.htm` before or immediately after setup.
+
+### Upgrade from v1.1.0 to v1.2.0
+
+Install the new version via HACS and restart HA. The three new DiIn binary sensors appear automatically if your firmware exposes them — no reconfiguration needed.
 
 ### Upgrade from v1.0.0 to v1.1.0
 
@@ -241,6 +245,9 @@ Entities marked *(firmware)* are only created if your device's firmware exposes 
 | `_safety_manager` | Safety manager active | if supported |
 | `_passivhaus_modus` | Passive house mode active | if supported |
 | `_vorheizregister_aktiv` | Pre-heater active | if supported |
+| `_digital_input_1` | Digital Input 1 (physical wiring) | if supported, disabled by default |
+| `_digital_input_2` | Digital Input 2 (physical wiring) | if supported, disabled by default |
+| `_digital_input_3` | Digital Input 3 (physical wiring) | if supported, disabled by default |
 
 ### Number entities
 | Suffix | Description | Range | Firmware |
@@ -502,6 +509,11 @@ Probed endpoints are tested once on startup (3 s timeout). If unreachable, they 
 ---
 
 ## Changelog
+
+### v1.2.0 (2026-05-22)
+- Digital inputs DiIn1/2/3 as binary sensors (disabled by default)
+- All firmware v2 tags (prg1–prg10, soze, time, date, events, langtxt0–154 etc.) added to known tags — zero unknown tag warnings after firmware update
+- 161 automated tests
 
 ### v1.1.0 (2026-05-21)
 - **Capability Discovery** — automatic detection of supported features on first poll

@@ -195,6 +195,23 @@ SAMPLE_XML = """<response>
   <nachlauf>5</nachlauf>
   <config_mac>00:04:A3:76:23:66</config_mac>
   <config_ip>10.10.4.1</config_ip>
+  <DiIn1>Aus</DiIn1><DiIn2>Aus</DiIn2><DiIn3>Ein</DiIn3>
+  <PassivHE> 16.0</PassivHE><PassivHA> 18.0</PassivHA>
+  <sensor0>Aus</sensor0>
+  <soze>Sommerzeit </soze>
+  <time>06:39:06</time>
+  <date>Fr, 22.05.2026</date>
+  <events>n/a</events>
+  <prg1>Stufe 3 </prg1><prg_start1>01:00</prg_start1><prg_stop1>05:00</prg_stop1><prg_wota1>Mo,Di,Mi,Do,Fr,Sa,So</prg_wota1>
+  <prg2>Stufe 3 </prg2><prg_start2>13:00</prg_start2><prg_stop2>16:00</prg_stop2><prg_wota2>Mo,Di,Mi,Do,Fr,Sa,So</prg_wota2>
+  <prg3>Aus</prg3><prg_start3>13:00</prg_start3><prg_stop3>16:00</prg_stop3><prg_wota3>-</prg_wota3>
+  <prg4>Aus</prg4><prg_start4>00:00</prg_start4><prg_stop4>00:00</prg_stop4><prg_wota4>-</prg_wota4>
+  <prg5>Aus</prg5><prg_start5>00:00</prg_start5><prg_stop5>00:00</prg_stop5><prg_wota5>-</prg_wota5>
+  <prg6>Aus</prg6><prg_start6>00:00</prg_start6><prg_stop6>00:00</prg_stop6><prg_wota6>-</prg_wota6>
+  <prg7>Aus</prg7><prg_start7>00:00</prg_start7><prg_stop7>00:00</prg_stop7><prg_wota7>-</prg_wota7>
+  <prg8>Aus</prg8><prg_start8>00:00</prg_start8><prg_stop8>00:00</prg_stop8><prg_wota8>-</prg_wota8>
+  <prg9>Aus</prg9><prg_start9>00:00</prg_start9><prg_stop9>00:00</prg_stop9><prg_wota9>-</prg_wota9>
+  <prg10>Aus</prg10><prg_start10>00:00</prg_start10><prg_stop10>00:00</prg_stop10><prg_wota10>-</prg_wota10>
 </response>"""
 
 
@@ -220,6 +237,23 @@ MINIMAL_XML = """<response>
   <SprachWahl>lang1</SprachWahl>
   <config_mac>00:04:A3:76:23:66</config_mac>
   <config_ip>10.10.4.1</config_ip>
+  <DiIn1>Aus</DiIn1><DiIn2>Aus</DiIn2><DiIn3>Ein</DiIn3>
+  <PassivHE> 16.0</PassivHE><PassivHA> 18.0</PassivHA>
+  <sensor0>Aus</sensor0>
+  <soze>Sommerzeit </soze>
+  <time>06:39:06</time>
+  <date>Fr, 22.05.2026</date>
+  <events>n/a</events>
+  <prg1>Stufe 3 </prg1><prg_start1>01:00</prg_start1><prg_stop1>05:00</prg_stop1><prg_wota1>Mo,Di,Mi,Do,Fr,Sa,So</prg_wota1>
+  <prg2>Stufe 3 </prg2><prg_start2>13:00</prg_start2><prg_stop2>16:00</prg_stop2><prg_wota2>Mo,Di,Mi,Do,Fr,Sa,So</prg_wota2>
+  <prg3>Aus</prg3><prg_start3>13:00</prg_start3><prg_stop3>16:00</prg_stop3><prg_wota3>-</prg_wota3>
+  <prg4>Aus</prg4><prg_start4>00:00</prg_start4><prg_stop4>00:00</prg_stop4><prg_wota4>-</prg_wota4>
+  <prg5>Aus</prg5><prg_start5>00:00</prg_start5><prg_stop5>00:00</prg_stop5><prg_wota5>-</prg_wota5>
+  <prg6>Aus</prg6><prg_start6>00:00</prg_start6><prg_stop6>00:00</prg_stop6><prg_wota6>-</prg_wota6>
+  <prg7>Aus</prg7><prg_start7>00:00</prg_start7><prg_stop7>00:00</prg_stop7><prg_wota7>-</prg_wota7>
+  <prg8>Aus</prg8><prg_start8>00:00</prg_start8><prg_stop8>00:00</prg_stop8><prg_wota8>-</prg_wota8>
+  <prg9>Aus</prg9><prg_start9>00:00</prg_start9><prg_stop9>00:00</prg_stop9><prg_wota9>-</prg_wota9>
+  <prg10>Aus</prg10><prg_start10>00:00</prg_start10><prg_stop10>00:00</prg_stop10><prg_wota10>-</prg_wota10>
 </response>"""
 
 

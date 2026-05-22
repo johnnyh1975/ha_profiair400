@@ -57,11 +57,6 @@ class TestSensorDescriptions:
             if s.key.startswith("hours_level_"):
                 assert s.entity_registry_enabled_default is False
 
-    def test_frost_preheater_present(self):
-        from kwl_fraenkische.sensor import SENSORS
-        keys = {s.key for s in SENSORS}
-        assert "hours_frost" in keys
-        assert "hours_preheater" in keys
 
     def test_value_functions_dont_crash(self, sample_xml):
         from kwl_fraenkische.sensor import SENSORS

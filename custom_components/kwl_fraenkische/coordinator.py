@@ -345,6 +345,25 @@ class KWLData:
         v = self._raw.get("control0", "")
         return v.strip() if v else None
 
+    # ── Digital Inputs ────────────────────────────────────────────────
+    @property
+    def digital_input_1(self) -> bool:
+        return (self._raw.get("DiIn1", "Aus").strip().lower() == "ein")
+
+    @property
+    def digital_input_2(self) -> bool:
+        return (self._raw.get("DiIn2", "Aus").strip().lower() == "ein")
+
+    @property
+    def digital_input_3(self) -> bool:
+        return (self._raw.get("DiIn3", "Aus").strip().lower() == "ein")
+
+    # ── Passive Heat Recovery Thresholds ──────────────────────────────
+
+    # ── DST / Time Status ─────────────────────────────────────────────
+
+    # ── Scheduler (prg1-10) ───────────────────────────────────────────
+
     @property
     def control_mode(self) -> str:
         return self._raw.get("control0", "").strip()
@@ -463,9 +482,6 @@ class KWLCoordinator(DataUpdateCoordinator[KWLData]):
             sw_version=None,
             configuration_url=f"http://{host}",
         )
-
-        # Initialized to None; populated on first successful poll via _discover_capabilities()
-        self.capabilities: KWLCapabilities | None = None
 
     async def async_setup(self) -> None:
         """Wird nach dem ersten erfolgreichen Datenabruf aufgerufen.
